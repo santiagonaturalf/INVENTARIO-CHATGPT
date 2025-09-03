@@ -1,0 +1,2 @@
+# INVENTARIO-CHATGPT
+Inventario SNF
