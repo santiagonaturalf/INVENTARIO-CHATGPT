@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f4f9; }
+      .container { padding: 15px; }
+      h2 { color: #4285F4; margin-top: 0; }
+      .filter-controls { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+      #search-input { flex-grow: 1; font-size: 14px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+      #category-filter {
+        padding: 10px;
+        font-size: 14px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+        min-width: 200px;
+      }
+      .table-wrapper { max-height: 550px; overflow-y: auto; border: 1px solid #ddd; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; vertical-align: middle; }
+      th { background-color: #f2f2f2; position: sticky; top: 0; }
+      .category-header th { background-color: #e0e0e0; color: #333; font-weight: bold; text-align: center; }
+      input[type="number"] { width: 90px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+      input[type="text"] { width: 150px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+      .discrepancy { background-color: #FFEBEE !important; }
+      .discrepancy input { border-color: #ff8a80; }
+      .approved { background-color: #E8F5E9 !important; } /* Light green for approved */
+      .approve-btn {
+        background-color: #2196F3;
+        color: white;
+        padding: 5px 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+      }
+      .approve-btn.approved-btn { background-color: #66BB6A; } /* Darker green when approved */
+      #footer-buttons { text-align: right; margin-top: 0; padding: 15px; background-color: #fff; border-top: 1px solid #ddd; }
+      #save-button { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+      #save-button:hover { opacity: 0.9; }
+      #save-button:disabled { background-color: #aaa; cursor: not-allowed; }
+      .no-movement { text-align: center; padding: 40px; color: #777; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Completar Inventario</h2>
+      <p>Confirma el stock real para los productos que tuvieron movimiento hoy.</p>
+      <div class="filter-controls">
+        <input type="text" id="search-input" onkeyup="applyFilters()" placeholder="Buscar por Producto Base...">
+        <select id="category-filter" onchange="applyFilters()">
+          <option value="">Todas las Categorías</option>
+          <? if (typeof sortedCategories !== 'undefined' && sortedCategories.length > 0) { ?>
+            <? for (let i = 0; i < sortedCategories.length; i++) { ?>
+              <option value="<?= sortedCategories[i] ?>"><?= sortedCategories[i] ?></option>
+            <? } ?>
+          <? } ?>
+        </select>
+        <label style="margin-left: 20px; user-select: none; display: flex; align-items: center; gap: 5px;">
+          <input type="checkbox" id="unapproved-filter" onchange="applyFilters()" style="height: 16px; width: 16px;">
+          Mostrar solo no aprobados
+        </label>
+      </div>
+    </div>
+    
+    <div class="table-wrapper">
+      <? if (typeof sortedCategories !== 'undefined' && sortedCategories.length > 0) { ?>
+        <table id="inventory-table">
+          <thead>
+            <tr>
+              <th>Producto Base</th>
+              <th>Vendido Hoy</th>
+              <th>Adquirido Hoy</th>
+              <th>Stock Esperado</th>
+              <th>Stock Real</th>
+              <th>Notas</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <? for (let i = 0; i < sortedCategories.length; i++) { ?>
+            <? const category = sortedCategories[i]; ?>
+            <? const products = productsByCategory[category]; ?>
+            <tbody class="category-group" data-category="<?= category ?>">
+              <tr class="category-header">
+                <th colspan="7" style="text-align: left; padding-left: 10px;"><?= category ?></th>
+              </tr>
+              <? for (let j = 0; j < products.length; j++) { ?>
+                <tr data-base-product="<?= products[j].baseProduct ?>" data-expected-stock="<?= products[j].expectedStock ?>" data-category="<?= category ?>">
+                  <td><?= products[j].baseProduct ?></td>
+                  <td><?= products[j].soldToday ?> <?= products[j].baseUnit ?></td>
+                  <td><?= products[j].acquiredToday ?></td>
+                  <td><?= products[j].expectedStock.toFixed(2) ?> <?= products[j].baseUnit ?></td>
+                  <td><input type="number" step="any" name="actualStock" value="<?= products[j].expectedStock.toFixed(2) ?>" oninput="checkDiscrepancy(this)"></td>
+                  <td><input type="text" name="note" placeholder="Añadir nota..."></td>
+                  <td><button class="approve-btn" onclick="approveRow(this)">Aprobar</button></td>
+                </tr>
+              <? } ?>
+            </tbody>
+          <? } ?>
+        </table>
+      <? } else { ?>
+        <div class="no-movement">
+          <p>No se encontraron productos con ventas o adquisiciones registradas para hoy.</p>
+        </div>
+      <? } ?>
+    </div>
+
+    <div id="footer-buttons">
+      <button id="save-button" type="button" onclick="submitInventory()">Guardar Inventario</button>
+    </div>
+
+    <script>
+      function applyFilters() {
+        const searchInput = document.getElementById("search-input");
+        const categoryInput = document.getElementById("category-filter");
+        const unapprovedInput = document.getElementById("unapproved-filter");
+        const searchText = searchInput.value.toUpperCase();
+        const selectedCategory = categoryInput.value;
+        const showUnapprovedOnly = unapprovedInput.checked;
+
+        const table = document.getElementById("inventory-table");
+        if (!table) return;
+        
+        const categoryGroups = table.getElementsByClassName('category-group');
+
+        for (let i = 0; i < categoryGroups.length; i++) {
+            const tbody = categoryGroups[i];
+            const tbodyCategory = tbody.dataset.category;
+            let categoryHasVisibleRows = false;
+
+            // Filter by category
+            if (selectedCategory && tbodyCategory !== selectedCategory) {
+                tbody.style.display = "none";
+                continue;
+            }
+
+            const rows = tbody.getElementsByTagName('tr');
+            // Loop through product rows (skip header row at index 0)
+            for (let j = 1; j < rows.length; j++) {
+                const productRow = rows[j];
+                let isVisible = true;
+
+                // Filter by "unapproved only"
+                if (showUnapprovedOnly && productRow.classList.contains('approved')) {
+                    isVisible = false;
+                }
+
+                // Filter by search text
+                const td = productRow.getElementsByTagName("td")[0];
+                if (isVisible && td) {
+                    const txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(searchText) === -1) {
+                        isVisible = false;
+                    }
+                } else if (!td) {
+                    isVisible = false; // Should not happen, but good practice
+                }
+                
+                if (isVisible) {
+                    productRow.style.display = "";
+                    categoryHasVisibleRows = true;
+                } else {
+                    productRow.style.display = "none";
+                }
+            }
+
+            // Show or hide the whole tbody based on whether it has visible rows
+            if (categoryHasVisibleRows) {
+                tbody.style.display = "";
+            } else {
+                tbody.style.display = "none";
+            }
+        }
+      }
+
+      function approveRow(btn) {
+        const row = btn.closest('tr');
+        row.classList.toggle('approved');
+        if (row.classList.contains('approved')) {
+          btn.textContent = 'Aprobado';
+          btn.classList.add('approved-btn');
+        } else {
+          btn.textContent = 'Aprobar';
+          btn.classList.remove('approved-btn');
+        }
+        // Re-apply filters to hide the row if the "unapproved only" filter is active
+        applyFilters();
+      }
+
+      function submitInventory() {
+        const rows = document.querySelectorAll('#inventory-table tr[data-base-product]');
+        const inventoryData = [];
+
+        rows.forEach(row => {
+          // Ensure the row is visible before processing
+          if (row.style.display === 'none') return;
+          
+          const baseProduct = row.dataset.baseProduct;
+          const expectedStock = parseFloat(row.dataset.expectedStock);
+          const actualStockInput = row.querySelector('input[name="actualStock"]');
+          const actualStock = parseFloat(actualStockInput.value);
+          const noteInput = row.querySelector('input[name="note"]');
+          const note = noteInput.value;
+
+          if (baseProduct && !isNaN(actualStock)) {
+            inventoryData.push({
+              baseProduct: baseProduct,
+              expectedStock: expectedStock,
+              actualStock: actualStock,
+              note: note
+            });
+          }
+        });
+        
+        if (inventoryData.length === 0 && <?= (typeof sortedCategories !== 'undefined' && sortedCategories.length > 0) ? 'true' : 'false' ?>) {
+            alert('No has introducido ningún valor de stock. No se guardará nada.');
+            return;
+        }
+
+        const button = document.getElementById("save-button");
+        button.disabled = true;
+        button.innerText = "Guardando...";
+
+        google.script.run
+          .withSuccessHandler(() => google.script.host.close())
+          .withFailureHandler((err) => {
+            alert('Error al guardar: ' + err.message);
+            button.disabled = false;
+            button.innerText = "Guardar Inventario";
+          })
+          .processInventoryCount(inventoryData);
+      }
+
+      function checkDiscrepancy(input) {
+        const row = input.closest('tr');
+        const expectedStock = parseFloat(row.dataset.expectedStock);
+        const actualStock = parseFloat(input.value);
+        
+        if (!isNaN(actualStock) && actualStock.toFixed(2) !== expectedStock.toFixed(2)) {
+          row.classList.add('discrepancy');
+        } else {
+          row.classList.remove('discrepancy');
+        }
+      }
+    </script>
+  </body>
+</html>
