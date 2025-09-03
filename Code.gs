@@ -827,11 +827,10 @@ function getBaseProductSuggestions() {
       Logger.log('La hoja SKU no fue encontrada.');
       return [];
     }
-    // 'Producto Base' is in the second column (B) based on the provided code's structure for SkuConverter
-    const range = skuSheet.getRange('B2:B' + skuSheet.getLastRow());
-    const values = range.getValues();
-    const suggestions = values.flat().filter(String);
-    return [...new Set(suggestions)]; // Return unique values
+    const skuData = skuSheet.getDataRange().getValues().slice(1); // Get all data, skip header
+    const converter = new SkuConverter(skuData);
+    const suggestions = converter.getAllBaseProducts();
+    return suggestions;
   } catch (e) {
     Logger.log('Error in getBaseProductSuggestions: ' + e.message);
     return [];
