@@ -35,7 +35,7 @@ const SOURCE_URLS = {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🚀 DASHBOARD PRINCIPAL')
-    .addItem('📊 Abrir Dashboard', 'synchronizeInventoryUI')
+    .addItem('📊 Abrir Dashboard', 'showDashboardV2')
     .addToUi();
 
   ui.createMenu('🔧 Herramientas de Inventario')
@@ -800,6 +800,115 @@ function normalizePhoneNumber(phone) {
   }
   return phone.toString().replace(/\D/g, '');
 }
+
+// --- Funciones para el nuevo Dashboard v2 ---
+
+function showDashboardV2() {
+  const html = HtmlService.createTemplateFromFile('dashboard_v2.html')
+    .evaluate()
+    .setWidth(1200)
+    .setHeight(700);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Dashboard de Inventario v2');
+}
+
+function getDashboardDataV2() {
+  synchronizeInventory(); // Make sure the 'Inventario' sheet is up to date.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const inventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTORY);
+  const inventoryData = inventorySheet.getDataRange().getValues().slice(1);
+
+  const inventory = inventoryData.map(row => {
+    return {
+      baseProduct: row[0],
+      lastInventory: row[1],
+      soldToday: row[7],
+      acquiredToday: row[5],
+      estimatedInventory: row[2]
+    };
+  });
+
+  const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
+  const salesData = salesSheet.getDataRange().getValues().slice(1);
+  const sales = salesData.map(row => {
+      return {
+          orderId: row[0],
+          clientName: row[1],
+          productName: row[9],
+          quantity: row[10]
+      };
+  });
+
+  const acquisitionsSheet = ss.getSheetByName(SHEET_NAMES.ACQUISITIONS);
+  const acquisitionsData = acquisitionsSheet.getDataRange().getValues().slice(1);
+  const acquisitions = acquisitionsData.map(row => {
+      return {
+          baseProduct: row[0],
+          format: row[1],
+          quantity: row[2]
+      };
+  });
+
+  return {
+    inventory: inventory,
+    sales: sales,
+    acquisitions: acquisitions
+  };
+}
+
+function saveInventoryV2(inventoryDataFromModal) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const historicalSheet = ss.getSheetByName(SHEET_NAMES.HISTORICAL_INVENTORY);
+    const discrepanciesSheet = ss.getSheetByName(SHEET_NAMES.DISCREPANCIES);
+    const inventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTORY);
+    const skuData = ss.getSheetByName(SHEET_NAMES.SKU).getDataRange().getValues().slice(1);
+    const converter = new SkuConverter(skuData);
+    const timestamp = new Date();
+
+    const fullInventoryData = inventorySheet.getDataRange().getValues().slice(1);
+    const inventoryMap = new Map(fullInventoryData.map(row => [row[0], row]));
+
+    const newHistoricalRows = [];
+    const newDiscrepancyRows = [];
+
+    inventoryDataFromModal.forEach(item => {
+        const baseProduct = item.baseProduct.trim();
+        const actualStock = parseFloat(item.actualStock);
+        const note = item.note || '';
+        const inventoryRow = inventoryMap.get(baseProduct);
+
+        if (inventoryRow && !isNaN(actualStock)) {
+            const expectedStock = parseFloat(inventoryRow[2]);
+            const discrepancy = actualStock - expectedStock;
+            const inventoryUnit = inventoryRow[3];
+
+            if (discrepancy !== 0) {
+                newDiscrepancyRows.push([timestamp, baseProduct, expectedStock, actualStock, discrepancy, inventoryUnit, note]);
+            }
+
+            newHistoricalRows.push([timestamp, baseProduct, actualStock, inventoryUnit]);
+
+            const rowToUpdate = fullInventoryData.findIndex(r => r[0] === baseProduct) + 2;
+            if (rowToUpdate > 1) {
+                inventorySheet.getRange(rowToUpdate, 5).setValue(actualStock);
+            }
+        }
+    });
+
+    if (newHistoricalRows.length > 0) {
+        historicalSheet.getRange(historicalSheet.getLastRow() + 1, 1, newHistoricalRows.length, newHistoricalRows[0].length).setValues(newHistoricalRows);
+    }
+
+    if (newDiscrepancyRows.length > 0) {
+        discrepanciesSheet.getRange(discrepanciesSheet.getLastRow() + 1, 1, newDiscrepancyRows.length, newDiscrepancyRows[0].length).setValues(newDiscrepancyRows);
+    }
+
+    // Refresh the inventory sheet with the new "real" stock values
+    synchronizeInventory();
+
+    return { success: true, message: "Inventario guardado con éxito." };
+}
+
+// --- Fin de funciones para el nuevo Dashboard v2 ---
 
 class SkuConverter {
   constructor(skuData) {

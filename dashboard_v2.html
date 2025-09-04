@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 10px; background-color: #f9f9f9; }
+      h2 { color: #4285F4; margin-top: 0; }
+      .tab { overflow: hidden; border-bottom: 2px solid #ccc; margin-bottom: 10px; }
+      .tab button { background-color: inherit; float: left; border: none; outline: none; cursor: pointer; padding: 12px 16px; transition: 0.3s; font-size: 16px; border-radius: 6px 6px 0 0; }
+      .tab button:hover { background-color: #ddd; }
+      .tab button.active { background-color: #4285F4; color: white; font-weight: bold; }
+      .tabcontent { display: none; padding: 6px 0; border-top: none; }
+      .table-wrapper { max-height: 500px; overflow-y: auto; border: 1px solid #ccc; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+      th { background-color: #f2f2f2; position: sticky; top: 0; }
+      #footer-buttons { text-align: right; margin-top: 15px; }
+      button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-left: 10px;}
+      button:hover { opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <h2>Dashboard de Inventario v2</h2>
+
+    <div class="tab">
+        <button class="tablinks" onclick="openView(event, 'InventoryView')" id="defaultOpen">Inventario</button>
+        <button class="tablinks" onclick="openView(event, 'SalesView')">Ventas de Hoy</button>
+        <button class="tablinks" onclick="openView(event, 'AcquisitionsView')">Adquisiciones de Hoy</button>
+    </div>
+
+    <div id="InventoryView" class="tabcontent">
+        <h3>Inventario de Productos</h3>
+        <div class="table-wrapper">
+            <table id="inventory-table">
+                <thead>
+                    <tr>
+                        <th>Producto Base</th>
+                        <th>Último Inventario</th>
+                        <th>Ventas Hoy</th>
+                        <th>Adquisiciones Hoy</th>
+                        <th>Inventario Estimado</th>
+                        <th>Inventario Real</th>
+                        <th>Notas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data will be populated by script -->
+                </tbody>
+            </table>
+        </div>
+        <div id="footer-buttons">
+            <button onclick="saveInventory()">Guardar Inventario</button>
+        </div>
+    </div>
+
+    <div id="SalesView" class="tabcontent">
+        <h3>Ventas de Hoy</h3>
+        <div class="table-wrapper">
+            <table id="sales-table">
+                <thead>
+                    <tr>
+                        <th>Nº Pedido</th>
+                        <th>Nombre Cliente</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data will be populated by script -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="AcquisitionsView" class="tabcontent">
+        <h3>Adquisiciones de Hoy</h3>
+        <div class="table-wrapper">
+            <table id="acquisitions-table">
+                <thead>
+                    <tr>
+                        <th>Producto Base</th>
+                        <th>Formato de Compra</th>
+                        <th>Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data will be populated by script -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function(event) {
+            google.script.run.withSuccessHandler(function(data) {
+                populateInventoryTable(data.inventory);
+                populateSalesTable(data.sales);
+                populateAcquisitionsTable(data.acquisitions);
+            }).withFailureHandler(function(error) {
+                alert('Error al cargar los datos: ' + error.message);
+            }).getDashboardDataV2();
+        });
+
+        function populateInventoryTable(data) {
+            var tbody = document.getElementById('inventory-table').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = ''; // Clear existing data
+            data.forEach(function(row) {
+                var newRow = tbody.insertRow();
+                newRow.innerHTML = `
+                    <td>${row.baseProduct}</td>
+                    <td>${row.lastInventory}</td>
+                    <td>${row.soldToday}</td>
+                    <td>${row.acquiredToday}</td>
+                    <td>${row.estimatedInventory}</td>
+                    <td><input type="number" step="any" name="actualStock" /></td>
+                    <td><input type="text" name="note" /></td>
+                `;
+            });
+        }
+
+        function populateSalesTable(data) {
+            var tbody = document.getElementById('sales-table').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = ''; // Clear existing data
+            data.forEach(function(row) {
+                var newRow = tbody.insertRow();
+                newRow.innerHTML = `
+                    <td>${row.orderId}</td>
+                    <td>${row.clientName}</td>
+                    <td>${row.productName}</td>
+                    <td>${row.quantity}</td>
+                `;
+            });
+        }
+
+        function populateAcquisitionsTable(data) {
+            var tbody = document.getElementById('acquisitions-table').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = ''; // Clear existing data
+            data.forEach(function(row) {
+                var newRow = tbody.insertRow();
+                newRow.innerHTML = `
+                    <td>${row.baseProduct}</td>
+                    <td>${row.format}</td>
+                    <td>${row.quantity}</td>
+                `;
+            });
+        }
+
+        function openView(evt, viewName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(viewName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        document.getElementById("defaultOpen").click();
+
+        function saveInventory() {
+            var table = document.getElementById('inventory-table');
+            var data = [];
+            for (var i = 1; i < table.rows.length; i++) {
+                var row = table.rows[i];
+                var actualStockInput = row.cells[5].getElementsByTagName('input')[0];
+                var noteInput = row.cells[6].getElementsByTagName('input')[0];
+
+                if (actualStockInput.value) { // Only save if a value is entered
+                     data.push({
+                        baseProduct: row.cells[0].innerText,
+                        actualStock: actualStockInput.value,
+                        note: noteInput.value
+                    });
+                }
+            }
+
+            if (data.length > 0) {
+                google.script.run.withSuccessHandler(function(response) {
+                    alert(response.message);
+                    // Optionally, refresh data
+                    google.script.run.withSuccessHandler(function(data) {
+                        populateInventoryTable(data.inventory);
+                    }).getDashboardDataV2();
+                }).withFailureHandler(function(error) {
+                    alert('Error al guardar el inventario: ' + error.message);
+                }).saveInventoryV2(data);
+            } else {
+                alert("No hay datos de inventario para guardar.");
+            }
+        }
+    </script>
+</body>
+</html>
