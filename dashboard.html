@@ -98,7 +98,7 @@
                 populateAcquisitionsTable(data.acquisitions);
             }).withFailureHandler(function(error) {
                 alert('Error al cargar los datos: ' + error.message);
-            }).getDashboardDataV2();
+            }).getDashboardData();
         });
 
         function populateInventoryTable(data) {
@@ -184,10 +184,10 @@
                     // Optionally, refresh data
                     google.script.run.withSuccessHandler(function(data) {
                         populateInventoryTable(data.inventory);
-                    }).getDashboardDataV2();
+                    }).getDashboardData();
                 }).withFailureHandler(function(error) {
                     alert('Error al guardar el inventario: ' + error.message);
-                }).saveInventoryV2(data);
+                }).saveInventory(data);
             } else {
                 alert("No hay datos de inventario para guardar.");
             }
