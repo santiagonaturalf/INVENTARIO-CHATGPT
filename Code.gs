@@ -7,7 +7,6 @@
  * @enum {string}
  */
 const SHEET_NAMES = {
-  INVENTORY: 'Inventario', // Will be deprecated
   INVENTARIO_ESTIMADO: 'Inventario Estimado',
   INVENTARIO_REAL: 'Inventario Real',
   ACQUISITIONS: 'Adquisiciones',
@@ -68,9 +67,7 @@ function createSheetsIfNeeded() {
   sheetNames.forEach(name => {
     if (!ss.getSheetByName(name)) {
       const newSheet = ss.insertSheet(name);
-      if (name === SHEET_NAMES.ACQUISITIONS) {
-        newSheet.appendRow(['Producto Base', 'Formato de Compra', 'Cantidad a Comprar', 'Correccion a Comprar', 'N Formato', 'N Cant', 'N Unidad']);
-      } else if (name === SHEET_NAMES.DISCREPANCIES) {
+      if (name === SHEET_NAMES.DISCREPANCIES) {
         newSheet.appendRow(['Timestamp', 'Producto Base', 'Stock Esperado', 'Stock Real', 'Discrepancia', 'Unidad de Stock', 'Nota']);
       } else if (name === SHEET_NAMES.HISTORICAL_INVENTORY) {
         newSheet.appendRow(['Timestamp', 'Producto Base', 'Cantidad Stock Real', 'Unidad Venta']);
@@ -446,6 +443,14 @@ function getEstimatedInventoryForModal() {
     }));
 }
 
+// Helper function to check if two dates are on the same day
+function isSameDay(date1, date2) {
+  if (!date1 || !date2) return false;
+  return date1.getFullYear() === date2.getFullYear() &&
+         date1.getMonth() === date2.getMonth() &&
+         date1.getDate() === date2.getDate();
+}
+
 function saveRealInventory(inventoryDataFromModal) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const historicalSheet = ss.getSheetByName(SHEET_NAMES.HISTORICAL_INVENTORY);
@@ -453,9 +458,9 @@ function saveRealInventory(inventoryDataFromModal) {
   const realInventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTARIO_REAL);
   const timestamp = new Date();
 
-  const rowsToAppendHistorical = [];
-  const rowsToAppendDiscrepancy = [];
-  const rowsToAppendReal = [];
+  const newHistoricalRows = [];
+  const newDiscrepancyRows = [];
+  const newRealInventoryLogRows = [];
 
   inventoryDataFromModal.forEach(item => {
     const baseProduct = item.baseProduct;
@@ -465,28 +470,42 @@ function saveRealInventory(inventoryDataFromModal) {
     const note = item.note || '';
     const discrepancy = actualStock - expectedStock;
 
-    // Row for Inventario Real sheet
-    rowsToAppendReal.push([timestamp, baseProduct, expectedStock.toFixed(2), actualStock.toFixed(2), discrepancy.toFixed(2), unit, note]);
-
-    // Row for Inventario Histórico sheet
-    rowsToAppendHistorical.push([timestamp, baseProduct, actualStock, unit]);
-
-    // Row for Discrepancias sheet (if any)
+    newRealInventoryLogRows.push([timestamp, baseProduct, expectedStock.toFixed(2), actualStock.toFixed(2), discrepancy.toFixed(2), unit, note]);
+    newHistoricalRows.push([timestamp, baseProduct, actualStock, unit]);
     if (discrepancy !== 0) {
-      rowsToAppendDiscrepancy.push([timestamp, baseProduct, expectedStock.toFixed(2), actualStock.toFixed(2), discrepancy.toFixed(2), unit, note]);
+      newDiscrepancyRows.push([timestamp, baseProduct, expectedStock.toFixed(2), actualStock.toFixed(2), discrepancy.toFixed(2), unit, note]);
     }
   });
 
-  if (rowsToAppendReal.length > 0) {
-    realInventorySheet.getRange(realInventorySheet.getLastRow() + 1, 1, rowsToAppendReal.length, rowsToAppendReal[0].length).setValues(rowsToAppendReal);
+  // --- Append to Real Inventory Log (this is always an append-only log) ---
+  if (newRealInventoryLogRows.length > 0) {
+    realInventorySheet.getRange(realInventorySheet.getLastRow() + 1, 1, newRealInventoryLogRows.length, newRealInventoryLogRows[0].length).setValues(newRealInventoryLogRows);
   }
 
-  if (rowsToAppendHistorical.length > 0) {
-    historicalSheet.getRange(historicalSheet.getLastRow() + 1, 1, rowsToAppendHistorical.length, rowsToAppendHistorical[0].length).setValues(rowsToAppendHistorical);
+  // --- Overwrite logic for Inventario Histórico ---
+  if (historicalSheet.getLastRow() > 1) {
+    const allHistoricalData = historicalSheet.getRange(2, 1, historicalSheet.getLastRow() - 1, 4).getValues();
+    const pastHistoricalData = allHistoricalData.filter(row => row[0] && !isSameDay(new Date(row[0]), timestamp));
+    const updatedHistoricalData = [...pastHistoricalData, ...newHistoricalRows];
+    historicalSheet.getRange(2, 1, historicalSheet.getMaxRows() - 1, historicalSheet.getMaxColumns()).clearContent();
+    if (updatedHistoricalData.length > 0) {
+      historicalSheet.getRange(2, 1, updatedHistoricalData.length, updatedHistoricalData[0].length).setValues(updatedHistoricalData);
+    }
+  } else if (newHistoricalRows.length > 0) {
+    historicalSheet.getRange(2, 1, newHistoricalRows.length, newHistoricalRows[0].length).setValues(newHistoricalRows);
   }
 
-  if (rowsToAppendDiscrepancy.length > 0) {
-    discrepanciesSheet.getRange(discrepanciesSheet.getLastRow() + 1, 1, rowsToAppendDiscrepancy.length, rowsToAppendDiscrepancy[0].length).setValues(rowsToAppendDiscrepancy);
+  // --- Overwrite logic for Discrepancias ---
+  if (discrepanciesSheet.getLastRow() > 1) {
+    const allDiscrepancyData = discrepanciesSheet.getRange(2, 1, discrepanciesSheet.getLastRow() - 1, 7).getValues();
+    const pastDiscrepancyData = allDiscrepancyData.filter(row => row[0] && !isSameDay(new Date(row[0]), timestamp));
+    const updatedDiscrepancyData = [...pastDiscrepancyData, ...newDiscrepancyRows];
+    discrepanciesSheet.getRange(2, 1, discrepanciesSheet.getMaxRows() - 1, discrepanciesSheet.getMaxColumns()).clearContent();
+    if (updatedDiscrepancyData.length > 0) {
+        discrepanciesSheet.getRange(2, 1, updatedDiscrepancyData.length, updatedDiscrepancyData[0].length).setValues(updatedDiscrepancyData);
+    }
+  } else if (newDiscrepancyRows.length > 0) {
+      discrepanciesSheet.getRange(discrepanciesSheet.getLastRow() + 1, 1, newDiscrepancyRows.length, newDiscrepancyRows[0].length).setValues(newDiscrepancyRows);
   }
 
   return { success: true, message: "Inventario real guardado con éxito." };
@@ -504,20 +523,28 @@ function fullResetSystem() {
     ui.alert('Iniciando el reinicio total del sistema... Por favor, ten paciencia.');
     try {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
-      const allSheets = ss.getSheets();
+      const originalSheets = ss.getSheets();
 
-      // Delete all sheets
-      allSheets.forEach(sheet => {
+      // Create a new temporary sheet to ensure one always exists.
+      const tempSheet = ss.insertSheet('temp_reset_sheet');
+
+      // Delete all the original sheets.
+      originalSheets.forEach(sheet => {
         ss.deleteSheet(sheet);
       });
 
       SpreadsheetApp.flush(); // Apply deletions
-      Utilities.sleep(2000); // Wait a moment
 
-      // Recreate the structure
-      createSheetsIfNeeded();
+      // Now, 'temp_reset_sheet' is the only one. Repurpose it as the first sheet.
+      const firstSheetName = SHEET_NAMES.INVENTARIO_ESTIMADO;
+      tempSheet.setName(firstSheetName);
+      tempSheet.clear();
+      tempSheet.appendRow(['Producto Base', 'Último Stock (fecha)', 'Stock Esperado', 'Unidad de Inventario']);
+
+      // Recreate the rest of the structure
+      createSheetsIfNeeded(); // This will skip creating the sheet we just made.
       SpreadsheetApp.flush();
-      Utilities.sleep(2000); // Wait a moment
+      Utilities.sleep(2000);
 
       // Setup the import formulas
       setupImportFormulas();
@@ -662,9 +689,9 @@ function getDashboardData() {
   const acquisitionsData = acquisitionsSheet.getLastRow() > 1 ? acquisitionsSheet.getDataRange().getValues().slice(1) : [];
   const acquisitions = acquisitionsData.map(row => {
       return {
-          baseProduct: row[0],
-          format: row[1],
-          quantity: row[2]
+          baseProduct: row[1], // Col B
+          format: row[2],      // Col C
+          quantity: row[3]     // Col D
       };
   });
 
