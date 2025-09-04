@@ -34,9 +34,11 @@ const SOURCE_URLS = {
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('📊 Inventario')
-    .addItem('🔄 Sincronizar y Ver Dashboard', 'synchronizeInventoryUI')
-    .addSeparator()
+  ui.createMenu('🚀 DASHBOARD PRINCIPAL')
+    .addItem('📊 Abrir Dashboard', 'synchronizeInventoryUI')
+    .addToUi();
+
+  ui.createMenu('🔧 Herramientas de Inventario')
     .addItem('✍️ Actualizar Inventario', 'launchInventoryCompletion')
     .addItem('📝 Generar Reporte de Cliente', 'showReportGeneratorUI')
     .addItem('🛒 Solicitar producto', 'showPurchaseRequestUI')
@@ -95,7 +97,7 @@ function setupImportFormulas() {
   }
   const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
    if (salesSheet.getRange('A1').getFormula() === '') {
-      salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:K")');
+      salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:L")');
   }
   const skuSheet = ss.getSheetByName(SHEET_NAMES.SKU);
   if (skuSheet.getRange('A1').getFormula() === '') {
@@ -208,6 +210,104 @@ function showReportGeneratorUI() {
     .setWidth(800)
     .setHeight(800);
   SpreadsheetApp.getUi().showModalDialog(html, 'Generador de Reportes');
+}
+
+/**
+ * Fetches and processes sales data for the main dashboard's sales view.
+ * It groups sales by order ID and includes customer name, van, and product details.
+ * @returns {object} An object where keys are order IDs and values are order details,
+ *                   or an object with an error property if something goes wrong.
+ */
+function getSalesData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
+    if (!salesSheet) {
+      throw new Error(`Sheet "${SHEET_NAMES.SALES}" not found.`);
+    }
+    const salesData = salesSheet.getDataRange().getValues();
+    const headers = salesData.shift(); // Remove headers, but keep for index reference if needed
+
+    // Use reduce to group products by order ID
+    const orders = salesData.reduce((acc, row) => {
+      const orderId = row[0];
+      if (!orderId) return acc; // Skip rows without an order ID
+
+      // If this is the first time we see this order ID, initialize it
+      if (!acc[orderId]) {
+        acc[orderId] = {
+          fullName: row[1], // "Nombre completo"
+          vanSet: new Set(), // Use a Set to store unique van names
+          products: []
+        };
+      }
+
+      // Add product info
+      acc[orderId].products.push({
+        name: row[9],     // "Nombre Producto"
+        quantity: row[10] // "Cantidad"
+      });
+
+      // Add the van to the set. Sets automatically handle uniqueness.
+      if (row[11]) { // "Furgón" is in column L (index 11)
+        acc[orderId].vanSet.add(row[11]);
+      }
+
+      return acc;
+    }, {});
+
+    // Post-process to convert the Set of vans into a comma-separated string
+    for (const orderId in orders) {
+      orders[orderId].van = [...orders[orderId].vanSet].join(', ');
+      delete orders[orderId].vanSet; // Clean up the temporary Set
+    }
+
+    return orders;
+  } catch (e) {
+    // Return an error object that the frontend can handle
+    return { error: e.message };
+  }
+}
+
+/**
+ * Calculates summary statistics for the main dashboard.
+ * @returns {object} An object with totalOrders and totalPackages.
+ */
+function getDashboardSummaryData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
+
+    if (!salesSheet) {
+      throw new Error("Sheet 'Ventas' not found.");
+    }
+
+    const salesData = salesSheet.getDataRange().getValues().slice(1); // Skip header
+
+    let totalPackages = 0;
+    const uniqueOrderIds = new Set();
+
+    salesData.forEach(row => {
+      const orderId = row[0];
+      const quantity = parseFloat(row[10]);
+
+      if (orderId) {
+        uniqueOrderIds.add(orderId);
+      }
+
+      if (!isNaN(quantity)) {
+        totalPackages += quantity;
+      }
+    });
+
+    return {
+      totalOrders: uniqueOrderIds.size,
+      totalPackages: totalPackages
+    };
+
+  } catch (e) {
+    return { error: e.message };
+  }
 }
 
 function getSalesDataForReporting() {
