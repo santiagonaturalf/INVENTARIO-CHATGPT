@@ -23,33 +23,31 @@
     <h2>Dashboard de Inventario v2</h2>
 
     <div class="tab">
-        <button class="tablinks" onclick="openView(event, 'InventoryView')" id="defaultOpen">Inventario</button>
+        <button class="tablinks" onclick="openView(event, 'InventoryView')" id="defaultOpen">Inventario Estimado</button>
         <button class="tablinks" onclick="openView(event, 'SalesView')">Ventas de Hoy</button>
         <button class="tablinks" onclick="openView(event, 'AcquisitionsView')">Adquisiciones de Hoy</button>
     </div>
 
     <div id="InventoryView" class="tabcontent">
-        <h3>Inventario de Productos</h3>
+        <h3>Inventario Estimado de Productos</h3>
+        <div id="footer-buttons" style="text-align: left; padding-bottom: 10px;">
+            <button onclick="runGenerateEstimates()" style="background-color: #008CBA;">Actualizar Datos Estimados</button>
+            <button onclick="launchRealEntry()" style="background-color: #4CAF50;">Registrar Inventario Real</button>
+        </div>
         <div class="table-wrapper">
             <table id="inventory-table">
                 <thead>
                     <tr>
                         <th>Producto Base</th>
                         <th>Último Inventario</th>
-                        <th>Ventas Hoy</th>
-                        <th>Adquisiciones Hoy</th>
-                        <th>Inventario Estimado</th>
-                        <th>Inventario Real</th>
-                        <th>Notas</th>
+                        <th>Stock Esperado</th>
+                        <th>Unidad</th>
                     </tr>
                 </thead>
                 <tbody>
                     <!-- Data will be populated by script -->
                 </tbody>
             </table>
-        </div>
-        <div id="footer-buttons">
-            <button onclick="saveInventory()">Guardar Inventario</button>
         </div>
     </div>
 
@@ -104,16 +102,17 @@
         function populateInventoryTable(data) {
             var tbody = document.getElementById('inventory-table').getElementsByTagName('tbody')[0];
             tbody.innerHTML = ''; // Clear existing data
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay datos de inventario estimado. Por favor, haz clic en "Actualizar Datos Estimados".</td></tr>';
+                return;
+            }
             data.forEach(function(row) {
                 var newRow = tbody.insertRow();
                 newRow.innerHTML = `
                     <td>${row.baseProduct}</td>
                     <td>${row.lastInventory}</td>
-                    <td>${row.soldToday}</td>
-                    <td>${row.acquiredToday}</td>
-                    <td>${row.estimatedInventory}</td>
-                    <td><input type="number" step="any" name="actualStock" /></td>
-                    <td><input type="text" name="note" /></td>
+                    <td>${row.expectedStock}</td>
+                    <td>${row.unit}</td>
                 `;
             });
         }
@@ -161,36 +160,32 @@
 
         document.getElementById("defaultOpen").click();
 
-        function saveInventory() {
-            var table = document.getElementById('inventory-table');
-            var data = [];
-            for (var i = 1; i < table.rows.length; i++) {
-                var row = table.rows[i];
-                var actualStockInput = row.cells[5].getElementsByTagName('input')[0];
-                var noteInput = row.cells[6].getElementsByTagName('input')[0];
+        function runGenerateEstimates() {
+            document.getElementById('inventory-table').querySelector('tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;">Generando inventario estimado...</td></tr>';
+            google.script.run
+                .withSuccessHandler(function() {
+                    alert('El inventario estimado ha sido generado/actualizado con éxito.');
+                    // Now that estimates are generated, refresh the dashboard data
+                    google.script.run
+                        .withSuccessHandler(function(data) {
+                            populateInventoryTable(data.inventory);
+                            // Optionally refresh other tabs too if needed
+                        })
+                        .withFailureHandler(function(error) {
+                            alert('Error al recargar los datos: ' + error.message);
+                        })
+                        .getDashboardData();
+                })
+                .withFailureHandler(function(error) {
+                    alert('Error al generar el inventario estimado: ' + error.message);
+                    // Restore a sensible message in the table
+                    populateInventoryTable([]);
+                })
+                .generarInventarioEstimado();
+        }
 
-                if (actualStockInput.value) { // Only save if a value is entered
-                     data.push({
-                        baseProduct: row.cells[0].innerText,
-                        actualStock: actualStockInput.value,
-                        note: noteInput.value
-                    });
-                }
-            }
-
-            if (data.length > 0) {
-                google.script.run.withSuccessHandler(function(response) {
-                    alert(response.message);
-                    // Optionally, refresh data
-                    google.script.run.withSuccessHandler(function(data) {
-                        populateInventoryTable(data.inventory);
-                    }).getDashboardData();
-                }).withFailureHandler(function(error) {
-                    alert('Error al guardar el inventario: ' + error.message);
-                }).saveInventory(data);
-            } else {
-                alert("No hay datos de inventario para guardar.");
-            }
+        function launchRealEntry() {
+            google.script.run.launchRealInventoryEntry();
         }
     </script>
 </body>
