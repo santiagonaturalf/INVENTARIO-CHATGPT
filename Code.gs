@@ -26,8 +26,8 @@ const SHEET_NAMES = {
  * @enum {string}
  */
 const SOURCE_URLS = {
-  OPERACION: 'https://docs.google.com/spreadsheets/d/1hPyDsDHo6Sll6mYY_4YGcPJ4I9FPpG1kQINcidMM-s4/edit',
-  ACQUISITIONS_SOURCE: 'https://docs.google.com/spreadsheets/d/1vCZejbBPMh73nbAhdZNYFOlvJvRoMA7PVSCUiLl8MMQ/edit?gid=1415653435#gid=1415653435',
+  OPERACION: 'https://docs.google.com/spreadsheets/d/1-gVCyrB57thPhC-4TlsA10ifWlFd78GSGUFYVCYqeXk/edit',
+  ACQUISITIONS_SOURCE: 'https://docs.google.com/spreadsheets/d/1vCZejbBPMh73nbAhdZNYFOlvJvRoMA7PVSCUiLl8MMQ/edit',
 };
 
 /**
@@ -50,6 +50,8 @@ function onOpen() {
     .addItem('Simular Datos Históricos', 'simulateHistoricalData')
     .addSeparator()
     .addItem('⚠️ Reiniciar Sistema (Puesta en Marcha Blanca)', 'resetSystem')
+    .addSeparator()
+    .addItem('💥 REINICIO TOTAL DEL SISTEMA 💥', 'fullResetSystem')
     .addToUi();
 
   createSheetsIfNeeded();
@@ -93,20 +95,26 @@ function createSheetsIfNeeded() {
  */
 function setupImportFormulas() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Setup for Adquisiciones
   const acquisitionsSheet = ss.getSheetByName(SHEET_NAMES.ACQUISITIONS);
-  if (acquisitionsSheet.getRange('A2').getFormula() === '') {
-    acquisitionsSheet.getRange('A2').setFormula('=IMPORTRANGE("' + SOURCE_URLS.ACQUISITIONS_SOURCE + '"; "RESUMEN_Adquisiciones!B2:D")');
+  if (acquisitionsSheet.getRange('A1').getFormula() === '') {
+    acquisitionsSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.ACQUISITIONS_SOURCE + '"; "RESUMEN_Adquisiciones!A:M")');
   }
-  if (acquisitionsSheet.getRange('D2').getFormula() === '') {
-    acquisitionsSheet.getRange('D2').setFormula('=IMPORTRANGE("' + SOURCE_URLS.ACQUISITIONS_SOURCE + '"; "RESUMEN_Adquisiciones!I2:L")');
-  }
+
+  // Setup for Ventas
   const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
-   if (salesSheet.getRange('A1').getFormula() === '') {
-      salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:L")');
+  if (salesSheet.getRange('A1').getFormula() === '') {
+    salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:K")');
   }
+  if (salesSheet.getRange('L1').getFormula() === '') {
+    salesSheet.getRange('L1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!AB:AB")');
+  }
+
+  // Setup for SKU
   const skuSheet = ss.getSheetByName(SHEET_NAMES.SKU);
   if (skuSheet.getRange('A1').getFormula() === '') {
-      skuSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "SKU!A:K")');
+    skuSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "SKU!A:K")');
   }
 }
 
@@ -344,7 +352,14 @@ function generarInventarioEstimado() {
   });
 
   acquisitionsData.forEach(row => {
-    let [productoBase, formatoCompra, cantComprar, corrCant, corrFormato, corrNCant, corrNUnidad] = row;
+    const productoBase = row[1]; // Column B
+    const formatoCompra = row[2]; // Column C
+    const cantComprar = row[3]; // Column D
+    const corrCant = row[8]; // Column I
+    const corrFormato = row[9]; // Column J
+    const corrNCant = row[10]; // Column K
+    const corrNUnidad = row[11]; // Column L
+
     if (!productoBase || typeof productoBase !== 'string') return;
     const baseProductKey = productoBase.trim();
     allBaseProductsSet.add(baseProductKey);
@@ -475,6 +490,46 @@ function saveRealInventory(inventoryDataFromModal) {
   }
 
   return { success: true, message: "Inventario real guardado con éxito." };
+}
+
+function fullResetSystem() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Confirmación de Reinicio TOTAL',
+    'Esta acción borrará TODAS las hojas del spreadsheet y las volverá a crear desde cero. Este proceso es IRREVERSIBLE y puede tardar varios minutos. ¿Estás seguro de que quieres continuar?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response == ui.Button.YES) {
+    ui.alert('Iniciando el reinicio total del sistema... Por favor, ten paciencia.');
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const allSheets = ss.getSheets();
+
+      // Delete all sheets
+      allSheets.forEach(sheet => {
+        ss.deleteSheet(sheet);
+      });
+
+      SpreadsheetApp.flush(); // Apply deletions
+      Utilities.sleep(2000); // Wait a moment
+
+      // Recreate the structure
+      createSheetsIfNeeded();
+      SpreadsheetApp.flush();
+      Utilities.sleep(2000); // Wait a moment
+
+      // Setup the import formulas
+      setupImportFormulas();
+
+      ui.alert('¡Reinicio total completado! El sistema ha sido restaurado a su estado inicial.');
+
+    } catch (e) {
+      ui.alert('Ocurrió un error durante el reinicio total: ' + e.message);
+    }
+  } else {
+    ui.alert('Operación cancelada. No se ha realizado ningún cambio.');
+  }
 }
 
 function simulateHistoricalData() {
