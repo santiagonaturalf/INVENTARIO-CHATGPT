@@ -65,15 +65,53 @@
           margin-top: 10px;
           margin-bottom: 10px;
       }
+      /* Summary styles */
+      #summary-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+      .summary-card {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        flex: 1 1 200px; /* Flex-grow, flex-shrink, basis */
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+      .summary-card h3 {
+        margin-top: 0;
+        font-size: 1em;
+        color: #333;
+      }
+      .summary-card p {
+        font-size: 2em;
+        font-weight: bold;
+        color: #4285F4;
+        margin: 5px 0 0 0;
+      }
     </style>
   </head>
   <body>
-    <h2>Dashboard de Inventario Diario</h2>
+    <h2>Dashboard Principal</h2>
+
+    <div id="summary-container">
+      <div class="summary-card">
+        <h3>Total de Pedidos</h3>
+        <p id="total-orders">...</p>
+      </div>
+      <div class="summary-card">
+        <h3>Total de Paquetes</h3>
+        <p id="total-packages">...</p>
+      </div>
+    </div>
 
     <div class="tab">
-      <button class="tablinks" onclick="openView(event, 'DetailedView')" id="defaultOpen">Vista Detallada</button>
+      <button class="tablinks" onclick="openView(event, 'SalesView')" id="defaultOpen">Visor de Ventas</button>
+      <button class="tablinks" onclick="openView(event, 'DetailedView')">Vista Detallada Inventario</button>
       <button class="tablinks" onclick="openView(event, 'CategoryView')">Vista por Categoría</button>
-      <button class="tablinks" onclick="openView(event, 'SalesView')">Visor de Ventas</button>
     </div>
 
     <div id="DetailedView" class="tabcontent">
@@ -141,9 +179,8 @@
     </div>
 
     <div id="SalesView" class="tabcontent">
-      <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-        <input type="text" id="sales-order-search" onkeyup="filterSales()" placeholder="Buscar por Número de Pedido..." style="flex-grow: 1;">
-        <input type="text" id="sales-product-search" onkeyup="filterSales()" placeholder="Buscar por Nombre de Producto..." style="flex-grow: 1;">
+      <div style="margin-bottom: 10px;">
+        <input type="text" id="sales-search-input" onkeyup="filterSales()" placeholder="Buscar por N° de pedido, Nombre, Furgón o Producto..." style="width: 100%; box-sizing: border-box; font-size: 14px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
       </div>
       <div id="sales-accordion-container"></div>
     </div>
@@ -217,7 +254,10 @@
           const order = salesData[orderId];
           const accordionBtn = document.createElement('button');
           accordionBtn.className = 'accordion';
-          accordionBtn.innerHTML = `Pedido: <strong>${orderId}</strong> - Teléfono: ${order.phone}`;
+          accordionBtn.innerHTML = `
+            <span style="font-weight:bold;">Nº Pedido:</span> ${orderId} &nbsp;&nbsp;&nbsp;
+            <span style="font-weight:bold;">Nombre:</span> ${order.fullName} &nbsp;&nbsp;&nbsp;
+            <span style="font-weight:bold;">Furgón:</span> ${order.van}`;
 
           const panel = document.createElement('div');
           panel.className = 'panel';
@@ -245,27 +285,53 @@
       }
 
       function filterSales() {
-        const orderFilter = document.getElementById('sales-order-search').value.toLowerCase();
-        const productFilter = document.getElementById('sales-product-search').value.toLowerCase();
+        const filter = document.getElementById('sales-search-input').value.toLowerCase();
         const accordions = document.getElementById('sales-accordion-container').getElementsByClassName('accordion');
 
         for (let i = 0; i < accordions.length; i++) {
           const btn = accordions[i];
-          const orderId = btn.querySelector('strong').textContent.toLowerCase();
           const panel = btn.nextElementSibling;
+          const orderText = btn.textContent.toLowerCase();
           const productsText = panel.textContent.toLowerCase();
 
-          const orderMatch = orderId.includes(orderFilter);
-          const productMatch = productFilter === '' || productsText.includes(productFilter);
-
-          if (orderMatch && productMatch) {
+          // If the filter matches the order header or the product details in the panel, show it.
+          if (orderText.includes(filter) || productsText.includes(filter)) {
             btn.style.display = '';
+            // This ensures the panel is also visible if its parent accordion button is visible.
+            // Note: This doesn't expand the accordion, just makes the element visible.
             panel.style.display = '';
           } else {
             btn.style.display = 'none';
             panel.style.display = 'none';
           }
         }
+      }
+
+      // Load the summary data as soon as the dashboard opens
+      document.addEventListener("DOMContentLoaded", loadDashboardSummary);
+
+      function loadDashboardSummary() {
+        // Start with a loading message
+        document.getElementById('total-orders').textContent = '...';
+        document.getElementById('total-packages').textContent = '...';
+
+        google.script.run
+          .withSuccessHandler(summary => {
+            if (summary.error) {
+              showError({message: "Error cargando el resumen: " + summary.error});
+              document.getElementById('total-orders').textContent = 'Error';
+              document.getElementById('total-packages').textContent = 'Error';
+              return;
+            }
+            document.getElementById('total-orders').textContent = summary.totalOrders;
+            document.getElementById('total-packages').textContent = summary.totalPackages;
+          })
+          .withFailureHandler(err => {
+             showError(err);
+             document.getElementById('total-orders').textContent = 'Error';
+             document.getElementById('total-packages').textContent = 'Error';
+          })
+          .getDashboardSummaryData();
       }
 
       function showError(err) {

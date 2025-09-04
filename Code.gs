@@ -16,6 +16,7 @@ const SHEET_NAMES = {
   TODAY_REPORT: 'REPORTE HOY',
   // Esta es la hoja donde se guardan los reportes de clientes generados.
   REPORTED_CLIENTS: 'ReporteClientes',
+  PURCHASE_REQUESTS: 'Solicitudes'
 };
 
 /**
@@ -33,11 +34,14 @@ const SOURCE_URLS = {
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('📊 Inventario')
-    .addItem('🔄 Sincronizar y Ver Dashboard', 'synchronizeInventoryUI')
-    .addSeparator()
+  ui.createMenu('🚀 DASHBOARD PRINCIPAL')
+    .addItem('📊 Abrir Dashboard', 'synchronizeInventoryUI')
+    .addToUi();
+
+  ui.createMenu('🔧 Herramientas de Inventario')
     .addItem('✍️ Actualizar Inventario', 'launchInventoryCompletion')
     .addItem('📝 Generar Reporte de Cliente', 'showReportGeneratorUI')
+    .addItem('🛒 Solicitar producto', 'showPurchaseRequestUI')
     .addSeparator()
     .addItem('⚡ Forzar Actualización de Datos', 'forceRefreshAllImports')
     .addItem('Simular Datos Históricos', 'simulateHistoricalData')
@@ -71,6 +75,9 @@ function createSheetsIfNeeded() {
         newSheet.appendRow(['Producto Base', 'Ultimo Stock', 'Stock Esperado', 'Unidad de Stock', 'STOCK REAL HOY', 'CANTIDAD (ADQUISICIONES HOY)', 'FORMATO (ADQUISICIONES HOY)', 'CANTIDAD VENDIDA HOY', 'NOMBRE PRODUCTO']);
       } else if (name === SHEET_NAMES.REPORTED_CLIENTS) {
         newSheet.appendRow(['Fecha Reporte', 'Nº Pedido', 'Nombre Cliente', 'Teléfono', 'Email', 'Nombre Producto', 'Cantidad']);
+      } else if (name === SHEET_NAMES.PURCHASE_REQUESTS) {
+        newSheet.appendRow(['Timestamp','Cantidad a Solicitar','Producto Base','Formato Adquisición','Cantidad Adquisición','Unidad Adquisición']);
+        newSheet.setFrozenRows(1);
       }
     }
   });
@@ -90,7 +97,7 @@ function setupImportFormulas() {
   }
   const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
    if (salesSheet.getRange('A1').getFormula() === '') {
-      salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:K")');
+      salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:L")');
   }
   const skuSheet = ss.getSheetByName(SHEET_NAMES.SKU);
   if (skuSheet.getRange('A1').getFormula() === '') {
@@ -205,6 +212,104 @@ function showReportGeneratorUI() {
   SpreadsheetApp.getUi().showModalDialog(html, 'Generador de Reportes');
 }
 
+/**
+ * Fetches and processes sales data for the main dashboard's sales view.
+ * It groups sales by order ID and includes customer name, van, and product details.
+ * @returns {object} An object where keys are order IDs and values are order details,
+ *                   or an object with an error property if something goes wrong.
+ */
+function getSalesData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
+    if (!salesSheet) {
+      throw new Error(`Sheet "${SHEET_NAMES.SALES}" not found.`);
+    }
+    const salesData = salesSheet.getDataRange().getValues();
+    const headers = salesData.shift(); // Remove headers, but keep for index reference if needed
+
+    // Use reduce to group products by order ID
+    const orders = salesData.reduce((acc, row) => {
+      const orderId = row[0];
+      if (!orderId) return acc; // Skip rows without an order ID
+
+      // If this is the first time we see this order ID, initialize it
+      if (!acc[orderId]) {
+        acc[orderId] = {
+          fullName: row[1], // "Nombre completo"
+          vanSet: new Set(), // Use a Set to store unique van names
+          products: []
+        };
+      }
+
+      // Add product info
+      acc[orderId].products.push({
+        name: row[9],     // "Nombre Producto"
+        quantity: row[10] // "Cantidad"
+      });
+
+      // Add the van to the set. Sets automatically handle uniqueness.
+      if (row[11]) { // "Furgón" is in column L (index 11)
+        acc[orderId].vanSet.add(row[11]);
+      }
+
+      return acc;
+    }, {});
+
+    // Post-process to convert the Set of vans into a comma-separated string
+    for (const orderId in orders) {
+      orders[orderId].van = [...orders[orderId].vanSet].join(', ');
+      delete orders[orderId].vanSet; // Clean up the temporary Set
+    }
+
+    return orders;
+  } catch (e) {
+    // Return an error object that the frontend can handle
+    return { error: e.message };
+  }
+}
+
+/**
+ * Calculates summary statistics for the main dashboard.
+ * @returns {object} An object with totalOrders and totalPackages.
+ */
+function getDashboardSummaryData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
+
+    if (!salesSheet) {
+      throw new Error("Sheet 'Ventas' not found.");
+    }
+
+    const salesData = salesSheet.getDataRange().getValues().slice(1); // Skip header
+
+    let totalPackages = 0;
+    const uniqueOrderIds = new Set();
+
+    salesData.forEach(row => {
+      const orderId = row[0];
+      const quantity = parseFloat(row[10]);
+
+      if (orderId) {
+        uniqueOrderIds.add(orderId);
+      }
+
+      if (!isNaN(quantity)) {
+        totalPackages += quantity;
+      }
+    });
+
+    return {
+      totalOrders: uniqueOrderIds.size,
+      totalPackages: totalPackages
+    };
+
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 function getSalesDataForReporting() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -242,9 +347,9 @@ function getReportedClientsData() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const reportSheet = ss.getSheetByName(SHEET_NAMES.REPORTED_CLIENTS);
-    
+
     if (!reportSheet) {
-      return []; 
+      return [];
     }
 
     const lastRow = reportSheet.getLastRow();
@@ -801,5 +906,56 @@ class SkuConverter {
       return match[1].trim();
     }
     return formatString.trim();
+  }
+}
+
+// --- Funciones para la Solicitud de Compra ---
+
+function showPurchaseRequestUI() {
+  const html = HtmlService.createTemplateFromFile('PurchaseRequest')
+    .evaluate()
+    .setWidth(500)
+    .setHeight(450);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Nueva Solicitud de Compra');
+}
+
+function getBaseProductSuggestions() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const skuSheet = ss.getSheetByName(SHEET_NAMES.SKU);
+    if (!skuSheet) {
+      Logger.log('La hoja SKU no fue encontrada.');
+      return [];
+    }
+    const skuData = skuSheet.getDataRange().getValues().slice(1); // Get all data, skip header
+    const converter = new SkuConverter(skuData);
+    const suggestions = converter.getAllBaseProducts();
+    return suggestions;
+  } catch (e) {
+    Logger.log('Error in getBaseProductSuggestions: ' + e.message);
+    return [];
+  }
+}
+
+function savePurchaseRequest(data) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const reqSheet = ss.getSheetByName(SHEET_NAMES.PURCHASE_REQUESTS);
+    if (!reqSheet) {
+      throw new Error(`Sheet "${SHEET_NAMES.PURCHASE_REQUESTS}" not found.`);
+    }
+    const newRow = [
+      new Date(),
+      data.cantidad,
+      data.productoBase,
+      data.formato,
+      data.cantidadAdquisicion,
+      data.unidad
+    ];
+    reqSheet.appendRow(newRow);
+    return { success: true };
+  } catch (e) {
+    Logger.log('Error in savePurchaseRequest: ' + e.message);
+    throw new Error('Failed to save request. ' + e.message);
   }
 }

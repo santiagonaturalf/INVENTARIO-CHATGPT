@@ -63,7 +63,7 @@
         </label>
       </div>
     </div>
-    
+
     <div class="table-wrapper">
       <? if (typeof sortedCategories !== 'undefined' && sortedCategories.length > 0) { ?>
         <table id="inventory-table">
@@ -121,7 +121,7 @@
 
         const table = document.getElementById("inventory-table");
         if (!table) return;
-        
+
         const categoryGroups = table.getElementsByClassName('category-group');
 
         for (let i = 0; i < categoryGroups.length; i++) {
@@ -156,7 +156,7 @@
                 } else if (!td) {
                     isVisible = false; // Should not happen, but good practice
                 }
-                
+
                 if (isVisible) {
                     productRow.style.display = "";
                     categoryHasVisibleRows = true;
@@ -195,7 +195,7 @@
         rows.forEach(row => {
           // Ensure the row is visible before processing
           if (row.style.display === 'none') return;
-          
+
           const baseProduct = row.dataset.baseProduct;
           const expectedStock = parseFloat(row.dataset.expectedStock);
           const actualStockInput = row.querySelector('input[name="actualStock"]');
@@ -212,7 +212,7 @@
             });
           }
         });
-        
+
         if (inventoryData.length === 0 && <?= (typeof sortedCategories !== 'undefined' && sortedCategories.length > 0) ? 'true' : 'false' ?>) {
             alert('No has introducido ningún valor de stock. No se guardará nada.');
             return;
@@ -236,7 +236,7 @@
         const row = input.closest('tr');
         const expectedStock = parseFloat(row.dataset.expectedStock);
         const actualStock = parseFloat(input.value);
-        
+
         if (!isNaN(actualStock) && actualStock.toFixed(2) !== expectedStock.toFixed(2)) {
           row.classList.add('discrepancy');
         } else {

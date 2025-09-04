@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+    <style>
+      .form-group {
+        margin-bottom: 10px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+      }
+      input[type="text"], input[type="number"] {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+      .button-container {
+        margin-top: 20px;
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Nueva Solicitud de Compra</h2>
+      <form id="purchaseRequestForm">
+        <div class="form-group">
+          <label for="cantidad">Cantidad a Solicitar</label>
+          <input type="number" id="cantidad" name="cantidad" required>
+        </div>
+        <div class="form-group">
+          <label for="productoBase">Producto Base</label>
+          <input type="text" id="productoBase" name="productoBase" list="productos-base-list" required>
+          <datalist id="productos-base-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label for="formato">Formato Adquisicion</label>
+          <input type="text" id="formato" name="formato" placeholder="Ej: Paquete, Caja, Bolsa" required>
+        </div>
+        <div class="form-group">
+          <label for="cantidadAdquisicion">Cantidad Adquisicion</label>
+          <input type="number" id="cantidadAdquisicion" name="cantidadAdquisicion" placeholder="Ej: 12" required>
+        </div>
+        <div class="form-group">
+          <label for="unidad">Unidad Adquisicion</label>
+          <input type="text" id="unidad" name="unidad" placeholder="Ej: Kg, g, unidad" required>
+        </div>
+        <div class="button-container">
+          <button type="submit" class="action">Guardar solicitud</button>
+          <button type="button" onclick="google.script.host.close()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        google.script.run.withSuccessHandler(function(suggestions) {
+          const dataList = document.getElementById('productos-base-list');
+          suggestions.forEach(function(suggestion) {
+            const option = document.createElement('option');
+            option.value = suggestion;
+            dataList.appendChild(option);
+          });
+        }).getBaseProductSuggestions();
+
+        document.getElementById('purchaseRequestForm').addEventListener('submit', function(e) {
+          e.preventDefault();
+          const formData = {
+            cantidad: document.getElementById('cantidad').value,
+            productoBase: document.getElementById('productoBase').value,
+            formato: document.getElementById('formato').value,
+            cantidadAdquisicion: document.getElementById('cantidadAdquisicion').value,
+            unidad: document.getElementById('unidad').value
+          };
+          google.script.run
+            .withSuccessHandler(function() {
+              google.script.host.close();
+            })
+            .withFailureHandler(function(err) {
+              alert('Error al guardar la solicitud: ' + err.message);
+            })
+            .savePurchaseRequest(formData);
+        });
+      });
+    </script>
+  </body>
+</html>
