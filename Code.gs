@@ -7,7 +7,9 @@
  * @enum {string}
  */
 const SHEET_NAMES = {
-  INVENTORY: 'Inventario',
+  INVENTORY: 'Inventario', // Will be deprecated
+  INVENTARIO_ESTIMADO: 'Inventario Estimado',
+  INVENTARIO_REAL: 'Inventario Real',
   ACQUISITIONS: 'Adquisiciones',
   SALES: 'Ventas',
   SKU: 'SKU',
@@ -24,8 +26,8 @@ const SHEET_NAMES = {
  * @enum {string}
  */
 const SOURCE_URLS = {
-  OPERACION: 'https://docs.google.com/spreadsheets/d/1hPyDsDHo6Sll6mYY_4YGcPJ4I9FPpG1kQINcidMM-s4/edit',
-  ACQUISITIONS_SOURCE: 'https://docs.google.com/spreadsheets/d/1vCZejbBPMh73nbAhdZNYFOlvJvRoMA7PVSCUiLl8MMQ/edit?gid=1415653435#gid=1415653435',
+  OPERACION: 'https://docs.google.com/spreadsheets/d/1-gVCyrB57thPhC-4TlsA10ifWlFd78GSGUFYVCYqeXk/edit',
+  ACQUISITIONS_SOURCE: 'https://docs.google.com/spreadsheets/d/1vCZejbBPMh73nbAhdZNYFOlvJvRoMA7PVSCUiLl8MMQ/edit',
 };
 
 /**
@@ -35,11 +37,12 @@ const SOURCE_URLS = {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🚀 DASHBOARD PRINCIPAL')
-    .addItem('📊 Abrir Dashboard', 'synchronizeInventoryUI')
+    .addItem('📊 Abrir Dashboard', 'showDashboard')
     .addToUi();
 
   ui.createMenu('🔧 Herramientas de Inventario')
-    .addItem('✍️ Actualizar Inventario', 'launchInventoryCompletion')
+    .addItem('🧮 Generar Inventario Estimado', 'generarInventarioEstimado')
+    .addSeparator()
     .addItem('📝 Generar Reporte de Cliente', 'showReportGeneratorUI')
     .addItem('🛒 Solicitar producto', 'showPurchaseRequestUI')
     .addSeparator()
@@ -47,6 +50,8 @@ function onOpen() {
     .addItem('Simular Datos Históricos', 'simulateHistoricalData')
     .addSeparator()
     .addItem('⚠️ Reiniciar Sistema (Puesta en Marcha Blanca)', 'resetSystem')
+    .addSeparator()
+    .addItem('💥 REINICIO TOTAL DEL SISTEMA 💥', 'fullResetSystem')
     .addToUi();
 
   createSheetsIfNeeded();
@@ -71,8 +76,10 @@ function createSheetsIfNeeded() {
         newSheet.appendRow(['Timestamp', 'Producto Base', 'Cantidad Stock Real', 'Unidad Venta']);
       } else if (name === SHEET_NAMES.TODAY_REPORT) {
         newSheet.appendRow(['SKU', 'Producto', 'Total Adquirido Hoy', 'Total Vendido Hoy', 'Stock Esperado', 'Último Stock Real', 'Discrepancia', 'Notas']);
-      } else if (name === SHEET_NAMES.INVENTORY) {
-        newSheet.appendRow(['Producto Base', 'Ultimo Stock', 'Stock Esperado', 'Unidad de Stock', 'STOCK REAL HOY', 'CANTIDAD (ADQUISICIONES HOY)', 'FORMATO (ADQUISICIONES HOY)', 'CANTIDAD VENDIDA HOY', 'NOMBRE PRODUCTO']);
+      } else if (name === SHEET_NAMES.INVENTARIO_ESTIMADO) {
+        newSheet.appendRow(['Producto Base', 'Último Stock (fecha)', 'Stock Esperado', 'Unidad de Inventario']);
+      } else if (name === SHEET_NAMES.INVENTARIO_REAL) {
+        newSheet.appendRow(['Fecha', 'Producto Base', 'Stock Esperado', 'Stock Real', 'Discrepancia', 'Unidad', 'Notas']);
       } else if (name === SHEET_NAMES.REPORTED_CLIENTS) {
         newSheet.appendRow(['Fecha Reporte', 'Nº Pedido', 'Nombre Cliente', 'Teléfono', 'Email', 'Nombre Producto', 'Cantidad']);
       } else if (name === SHEET_NAMES.PURCHASE_REQUESTS) {
@@ -88,20 +95,26 @@ function createSheetsIfNeeded() {
  */
 function setupImportFormulas() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Setup for Adquisiciones
   const acquisitionsSheet = ss.getSheetByName(SHEET_NAMES.ACQUISITIONS);
-  if (acquisitionsSheet.getRange('A2').getFormula() === '') {
-    acquisitionsSheet.getRange('A2').setFormula('=IMPORTRANGE("' + SOURCE_URLS.ACQUISITIONS_SOURCE + '"; "RESUMEN_Adquisiciones!B2:D")');
+  if (acquisitionsSheet.getRange('A1').getFormula() === '') {
+    acquisitionsSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.ACQUISITIONS_SOURCE + '"; "RESUMEN_Adquisiciones!A:M")');
   }
-  if (acquisitionsSheet.getRange('D2').getFormula() === '') {
-    acquisitionsSheet.getRange('D2').setFormula('=IMPORTRANGE("' + SOURCE_URLS.ACQUISITIONS_SOURCE + '"; "RESUMEN_Adquisiciones!I2:L")');
-  }
+
+  // Setup for Ventas
   const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
-   if (salesSheet.getRange('A1').getFormula() === '') {
-      salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:L")');
+  if (salesSheet.getRange('A1').getFormula() === '') {
+    salesSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!A:K")');
   }
+  if (salesSheet.getRange('L1').getFormula() === '') {
+    salesSheet.getRange('L1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "Orders!AB:AB")');
+  }
+
+  // Setup for SKU
   const skuSheet = ss.getSheetByName(SHEET_NAMES.SKU);
   if (skuSheet.getRange('A1').getFormula() === '') {
-      skuSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "SKU!A:K")');
+    skuSheet.getRange('A1').setFormula('=IMPORTRANGE("' + SOURCE_URLS.OPERACION + '"; "SKU!A:K")');
   }
 }
 
@@ -162,47 +175,7 @@ function forceRefreshAllImports() {
   }
 }
 
-/**
- * Main entry point. Runs sync and then shows the main dashboard.
- */
-function synchronizeInventoryUI() {
-  const ui = SpreadsheetApp.getUi();
-  try {
-    synchronizeInventory();
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const inventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTORY);
-    const inventoryData = inventorySheet.getDataRange().getValues().slice(1);
-
-    const skuData = ss.getSheetByName(SHEET_NAMES.SKU).getDataRange().getValues().slice(1);
-    const converter = new SkuConverter(skuData);
-
-    const inventoryByCategory = {};
-    inventoryData.forEach(row => {
-      const baseProduct = row[0];
-      const category = converter.getCategory(baseProduct) || 'Sin Categoría';
-      if (!inventoryByCategory[category]) {
-        inventoryByCategory[category] = [];
-      }
-      inventoryByCategory[category].push(row);
-    });
-
-    const htmlTemplate = HtmlService.createTemplateFromFile('Dashboard');
-    htmlTemplate.inventoryData = inventoryData;
-    htmlTemplate.inventoryByCategory = inventoryByCategory;
-
-    const html = htmlTemplate.evaluate().setWidth(900).setHeight(600);
-    ui.showModalDialog(html, 'Dashboard de Inventario Diario');
-
-  } catch (e) {
-    ui.alert('Error al sincronizar y mostrar el dashboard: ' + e.message);
-  }
-}
-
 // Wrapper functions to allow a modal to trigger another modal
-function launchInventoryCompletion() {
-  showInventoryCompletionUI();
-}
 
 function showReportGeneratorUI() {
   const html = HtmlService.createTemplateFromFile('ReportGenerator')
@@ -212,103 +185,6 @@ function showReportGeneratorUI() {
   SpreadsheetApp.getUi().showModalDialog(html, 'Generador de Reportes');
 }
 
-/**
- * Fetches and processes sales data for the main dashboard's sales view.
- * It groups sales by order ID and includes customer name, van, and product details.
- * @returns {object} An object where keys are order IDs and values are order details,
- *                   or an object with an error property if something goes wrong.
- */
-function getSalesData() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
-    if (!salesSheet) {
-      throw new Error(`Sheet "${SHEET_NAMES.SALES}" not found.`);
-    }
-    const salesData = salesSheet.getDataRange().getValues();
-    const headers = salesData.shift(); // Remove headers, but keep for index reference if needed
-
-    // Use reduce to group products by order ID
-    const orders = salesData.reduce((acc, row) => {
-      const orderId = row[0];
-      if (!orderId) return acc; // Skip rows without an order ID
-
-      // If this is the first time we see this order ID, initialize it
-      if (!acc[orderId]) {
-        acc[orderId] = {
-          fullName: row[1], // "Nombre completo"
-          vanSet: new Set(), // Use a Set to store unique van names
-          products: []
-        };
-      }
-
-      // Add product info
-      acc[orderId].products.push({
-        name: row[9],     // "Nombre Producto"
-        quantity: row[10] // "Cantidad"
-      });
-
-      // Add the van to the set. Sets automatically handle uniqueness.
-      if (row[11]) { // "Furgón" is in column L (index 11)
-        acc[orderId].vanSet.add(row[11]);
-      }
-
-      return acc;
-    }, {});
-
-    // Post-process to convert the Set of vans into a comma-separated string
-    for (const orderId in orders) {
-      orders[orderId].van = [...orders[orderId].vanSet].join(', ');
-      delete orders[orderId].vanSet; // Clean up the temporary Set
-    }
-
-    return orders;
-  } catch (e) {
-    // Return an error object that the frontend can handle
-    return { error: e.message };
-  }
-}
-
-/**
- * Calculates summary statistics for the main dashboard.
- * @returns {object} An object with totalOrders and totalPackages.
- */
-function getDashboardSummaryData() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
-
-    if (!salesSheet) {
-      throw new Error("Sheet 'Ventas' not found.");
-    }
-
-    const salesData = salesSheet.getDataRange().getValues().slice(1); // Skip header
-
-    let totalPackages = 0;
-    const uniqueOrderIds = new Set();
-
-    salesData.forEach(row => {
-      const orderId = row[0];
-      const quantity = parseFloat(row[10]);
-
-      if (orderId) {
-        uniqueOrderIds.add(orderId);
-      }
-
-      if (!isNaN(quantity)) {
-        totalPackages += quantity;
-      }
-    });
-
-    return {
-      totalOrders: uniqueOrderIds.size,
-      totalPackages: totalPackages
-    };
-
-  } catch (e) {
-    return { error: e.message };
-  }
-}
 
 function getSalesDataForReporting() {
   try {
@@ -443,7 +319,7 @@ function saveReport(reports) {
   }
 }
 
-function synchronizeInventory() {
+function generarInventarioEstimado() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const acquisitionsData = ss.getSheetByName(SHEET_NAMES.ACQUISITIONS).getDataRange().getValues().slice(1);
@@ -476,7 +352,14 @@ function synchronizeInventory() {
   });
 
   acquisitionsData.forEach(row => {
-    let [productoBase, formatoCompra, cantComprar, corrCant, corrFormato, corrNCant, corrNUnidad] = row;
+    const productoBase = row[1]; // Column B
+    const formatoCompra = row[2]; // Column C
+    const cantComprar = row[3]; // Column D
+    const corrCant = row[8]; // Column I
+    const corrFormato = row[9]; // Column J
+    const corrNCant = row[10]; // Column K
+    const corrNUnidad = row[11]; // Column L
+
     if (!productoBase || typeof productoBase !== 'string') return;
     const baseProductKey = productoBase.trim();
     allBaseProductsSet.add(baseProductKey);
@@ -515,202 +398,138 @@ function synchronizeInventory() {
     return map;
   }, new Map());
 
-  const inventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTORY);
-  const lastRow = inventorySheet.getLastRow();
-  const realStockMap = new Map();
-  if (lastRow > 1) {
-    const oldData = inventorySheet.getRange(2, 1, lastRow - 1, 5).getValues();
-    oldData.forEach(r => { if(r[0] && typeof r[0] === 'string') realStockMap.set(r[0].trim(), r[4]) });
-  }
+  const inventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTARIO_ESTIMADO);
 
   const inventoryOutput = [];
   allBaseProductsSet.forEach(baseProduct => {
     const lastStockInfo = latestHistoricalStock.get(baseProduct);
     const lastStock = lastStockInfo ? lastStockInfo.stock : 0;
-    const lastStockString = lastStockInfo ? `${lastStockInfo.stock} (${lastStockInfo.timestamp.toLocaleDateString()})` : 'N/A';
+    const lastStockString = lastStockInfo ? `${lastStockInfo.stock.toFixed(2)} (${lastStockInfo.timestamp.toLocaleDateString()})` : 'N/A';
     const acquiredTotal = acquisitionsByBase.get(baseProduct) || 0;
     const soldTotal = salesByBase.get(baseProduct) || 0;
     const expectedStock = lastStock + acquiredTotal - soldTotal;
     const inventoryUnit = converter.getInventoryUnit(baseProduct);
-    const realStock = realStockMap.get(baseProduct) || '';
-    const acqSummaries = acquisitionsSummaryByBase.get(baseProduct) || [];
-    const acqQtyStr = acqSummaries.map(s => s.qty).join(', ');
-    const acqFormatStr = acqSummaries.map(s => s.format).join(', ');
-    const salesSummaryMap = salesSummaryByBase.get(baseProduct);
-    const salesSummaryStr = salesSummaryMap ? [...salesSummaryMap.entries()].map(([name, qty]) => `${name} (${qty})`).join(', ') : '';
+
     inventoryOutput.push([
-      baseProduct, lastStockString, expectedStock, inventoryUnit, realStock,
-      acqQtyStr, acqFormatStr, soldTotal, salesSummaryStr
+      baseProduct, lastStockString, expectedStock.toFixed(2), inventoryUnit
     ]);
   });
 
-  inventorySheet.getRange(2, 1, inventorySheet.getMaxRows() - 1, 9).clearContent();
+  // Clear previous data and write new estimates
+  inventorySheet.getRange(2, 1, inventorySheet.getMaxRows() - 1, inventorySheet.getMaxColumns()).clearContent();
   if (inventoryOutput.length > 0) {
     inventorySheet.getRange(2, 1, inventoryOutput.length, inventoryOutput[0].length).setValues(inventoryOutput);
   }
 }
 
-function showInventoryCompletionUI() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ui = SpreadsheetApp.getUi();
-  try {
-    synchronizeInventory();
-    const inventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTORY);
-    const inventoryData = inventorySheet.getDataRange().getValues().slice(1);
-    const skuData = ss.getSheetByName(SHEET_NAMES.SKU).getDataRange().getValues().slice(1);
-    const converter = new SkuConverter(skuData);
 
-    // Filter for products with movement (sales or acquisitions)
-    const productsWithMovement = inventoryData.filter(row => {
-      const acquiredQty = row[5]; // CANTIDAD (ADQUISICIONES HOY)
-      const soldQty = row[7];     // CANTIDAD VENDIDA HOY
-      return (acquiredQty && parseFloat(acquiredQty) > 0) || (soldQty && parseFloat(soldQty) > 0);
-    });
+function launchRealInventoryEntry() {
+  const html = HtmlService.createTemplateFromFile('RealInventoryEntry.html')
+    .evaluate()
+    .setWidth(800)
+    .setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Registrar Inventario Real');
+}
 
-    // Group products by category
-    const productsByCategory = productsWithMovement.reduce((acc, row) => {
-      const baseProduct = row[0];
-      const category = converter.getCategory(baseProduct) || 'Sin Categoría';
-
-      if (!acc[category]) {
-        acc[category] = [];
-      }
-
-      acc[category].push({
-        baseProduct: baseProduct,
-        expectedStock: row[2],
-        baseUnit: row[3],
-        acquiredToday: row[5] || '0',
-        soldToday: row[7] || '0'
-      });
-
-      return acc;
-    }, {});
-
-    // Sort categories alphabetically
-    const sortedCategories = Object.keys(productsByCategory).sort((a, b) => a.localeCompare(b));
-
-    // Sort products within each category alphabetically
-    for (const category in productsByCategory) {
-        productsByCategory[category].sort((a, b) => a.baseProduct.localeCompare(b.baseProduct));
+function getEstimatedInventoryForModal() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const estimatedSheet = ss.getSheetByName(SHEET_NAMES.INVENTARIO_ESTIMADO);
+    if (estimatedSheet.getLastRow() < 2) {
+        return [];
     }
-
-    const htmlTemplate = HtmlService.createTemplateFromFile('InventoryCompletion');
-    htmlTemplate.productsByCategory = productsByCategory;
-    htmlTemplate.sortedCategories = sortedCategories; // Pass sorted keys for the view
-
-    const html = htmlTemplate.evaluate().setWidth(1200).setHeight(700);
-    ui.showModalDialog(html, 'Completar Inventario (Productos con Movimiento)');
-  } catch (e) {
-    ui.alert('Error al abrir la ventana de inventario: ' + e.message);
-  }
+    const data = estimatedSheet.getRange(2, 1, estimatedSheet.getLastRow() - 1, 4).getValues();
+    return data.map(row => ({
+        baseProduct: row[0],
+        lastStock: row[1],
+        expectedStock: row[2],
+        unit: row[3]
+    }));
 }
 
-// Helper function to check if two dates are on the same day
-function isSameDay(date1, date2) {
-  if (!date1 || !date2) return false;
-  return date1.getFullYear() === date2.getFullYear() &&
-         date1.getMonth() === date2.getMonth() &&
-         date1.getDate() === date2.getDate();
-}
-
-function processInventoryCount(inventoryDataFromModal) {
+function saveRealInventory(inventoryDataFromModal) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const historicalSheet = ss.getSheetByName(SHEET_NAMES.HISTORICAL_INVENTORY);
   const discrepanciesSheet = ss.getSheetByName(SHEET_NAMES.DISCREPANCIES);
-  const inventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTORY);
-  const reportSheet = ss.getSheetByName(SHEET_NAMES.TODAY_REPORT);
-  const skuData = ss.getSheetByName(SHEET_NAMES.SKU).getDataRange().getValues().slice(1);
-  const converter = new SkuConverter(skuData);
+  const realInventorySheet = ss.getSheetByName(SHEET_NAMES.INVENTARIO_REAL);
   const timestamp = new Date();
 
-  // Get current state from Inventario sheet
-  const fullInventoryData = inventorySheet.getDataRange().getValues().slice(1);
-  const inventoryMap = new Map(fullInventoryData.map(row => [row[0], row])); // Map by Producto Base
-
-  const newHistoricalRows = [];
-  const newDiscrepancyRows = [];
-  const reportRows = [];
+  const rowsToAppendHistorical = [];
+  const rowsToAppendDiscrepancy = [];
+  const rowsToAppendReal = [];
 
   inventoryDataFromModal.forEach(item => {
-    const baseProduct = item.baseProduct.trim();
+    const baseProduct = item.baseProduct;
+    const expectedStock = parseFloat(item.expectedStock);
     const actualStock = parseFloat(item.actualStock);
+    const unit = item.unit;
     const note = item.note || '';
-    const inventoryRow = inventoryMap.get(baseProduct);
+    const discrepancy = actualStock - expectedStock;
 
-    if (inventoryRow && !isNaN(actualStock)) {
-      const expectedStock = parseFloat(inventoryRow[2]);
-      const discrepancy = actualStock - expectedStock;
-      const inventoryUnit = inventoryRow[3];
-      const sku = converter.getSku(baseProduct) || '';
-      const acquiredToday = inventoryRow[5]; // CANTIDAD (ADQUISICIONES HOY) is at index 5
-      const soldToday = inventoryRow[7]; // Total Vendido Hoy is at index 7
+    // Row for Inventario Real sheet
+    rowsToAppendReal.push([timestamp, baseProduct, expectedStock.toFixed(2), actualStock.toFixed(2), discrepancy.toFixed(2), unit, note]);
 
-      // 1. Prepare row for REPORTE HOY
-      reportRows.push([
-        sku,
-        baseProduct,
-        acquiredToday,
-        soldToday,
-        expectedStock,
-        actualStock,
-        discrepancy,
-        note
-      ]);
+    // Row for Inventario Histórico sheet
+    rowsToAppendHistorical.push([timestamp, baseProduct, actualStock, unit]);
 
-      // 2. Prepare row for Discrepancias (if any)
-      if (discrepancy !== 0) {
-        newDiscrepancyRows.push([timestamp, baseProduct, expectedStock, actualStock, discrepancy, inventoryUnit, note]);
-      }
-
-      // 3. Prepare row for Inventario Histórico
-      newHistoricalRows.push([timestamp, baseProduct, actualStock, inventoryUnit]);
-
-      // 4. Update STOCK REAL HOY in Inventario sheet
-      const rowToUpdate = fullInventoryData.findIndex(r => r[0] === baseProduct) + 2;
-      if (rowToUpdate > 1) {
-        inventorySheet.getRange(rowToUpdate, 5).setValue(actualStock);
-      }
+    // Row for Discrepancias sheet (if any)
+    if (discrepancy !== 0) {
+      rowsToAppendDiscrepancy.push([timestamp, baseProduct, expectedStock.toFixed(2), actualStock.toFixed(2), discrepancy.toFixed(2), unit, note]);
     }
   });
 
-  // --- Overwrite logic for Inventario Histórico ---
-  if (historicalSheet.getLastRow() > 1) {
-    const allHistoricalData = historicalSheet.getRange(2, 1, historicalSheet.getLastRow() - 1, 4).getValues();
-    const pastHistoricalData = allHistoricalData.filter(row => row[0] && !isSameDay(new Date(row[0]), timestamp));
-    const updatedHistoricalData = [...pastHistoricalData, ...newHistoricalRows];
-    historicalSheet.getRange(2, 1, historicalSheet.getMaxRows() - 1, historicalSheet.getMaxColumns()).clearContent();
-    if (updatedHistoricalData.length > 0) {
-      historicalSheet.getRange(2, 1, updatedHistoricalData.length, updatedHistoricalData[0].length).setValues(updatedHistoricalData);
-    }
-  } else if (newHistoricalRows.length > 0) {
-    historicalSheet.getRange(2, 1, newHistoricalRows.length, newHistoricalRows[0].length).setValues(newHistoricalRows);
+  if (rowsToAppendReal.length > 0) {
+    realInventorySheet.getRange(realInventorySheet.getLastRow() + 1, 1, rowsToAppendReal.length, rowsToAppendReal[0].length).setValues(rowsToAppendReal);
   }
 
-  // --- Overwrite logic for Discrepancias ---
-  if (discrepanciesSheet.getLastRow() > 1) {
-    const allDiscrepancyData = discrepanciesSheet.getRange(2, 1, discrepanciesSheet.getLastRow() - 1, 7).getValues();
-    const pastDiscrepancyData = allDiscrepancyData.filter(row => row[0] && !isSameDay(new Date(row[0]), timestamp));
-    const updatedDiscrepancyData = [...pastDiscrepancyData, ...newDiscrepancyRows];
-    discrepanciesSheet.getRange(2, 1, discrepanciesSheet.getMaxRows() - 1, discrepanciesSheet.getMaxColumns()).clearContent();
-    if (updatedDiscrepancyData.length > 0) {
-        discrepanciesSheet.getRange(2, 1, updatedDiscrepancyData.length, updatedDiscrepancyData[0].length).setValues(updatedDiscrepancyData);
-    }
-  } else if (newDiscrepancyRows.length > 0) {
-      discrepanciesSheet.getRange(discrepanciesSheet.getLastRow() + 1, 1, newDiscrepancyRows.length, newDiscrepancyRows[0].length).setValues(newDiscrepancyRows);
+  if (rowsToAppendHistorical.length > 0) {
+    historicalSheet.getRange(historicalSheet.getLastRow() + 1, 1, rowsToAppendHistorical.length, rowsToAppendHistorical[0].length).setValues(rowsToAppendHistorical);
   }
 
-  // --- REPORTE HOY logic (remains the same) ---
-  const reportHeader = ['SKU', 'Producto', 'Total Adquirido Hoy', 'Total Vendido Hoy', 'Stock Esperado', 'Último Stock Real', 'Discrepancia', 'Notas'];
-  reportSheet.getRange(1, 1, 1, reportHeader.length).setValues([reportHeader]);
-  reportSheet.getRange(2, 1, reportSheet.getMaxRows() - 1, reportHeader.length).clearContent();
-  if (reportRows.length > 0) {
-    reportSheet.getRange(2, 1, reportRows.length, reportRows[0].length).setValues(reportRows);
+  if (rowsToAppendDiscrepancy.length > 0) {
+    discrepanciesSheet.getRange(discrepanciesSheet.getLastRow() + 1, 1, rowsToAppendDiscrepancy.length, rowsToAppendDiscrepancy[0].length).setValues(rowsToAppendDiscrepancy);
   }
+
+  return { success: true, message: "Inventario real guardado con éxito." };
 }
 
-function generateTodaysReport() {
-    SpreadsheetApp.getUi().alert('Esta función ha sido eliminada y su funcionalidad integrada en la hoja "Inventario".');
+function fullResetSystem() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Confirmación de Reinicio TOTAL',
+    'Esta acción borrará TODAS las hojas del spreadsheet y las volverá a crear desde cero. Este proceso es IRREVERSIBLE y puede tardar varios minutos. ¿Estás seguro de que quieres continuar?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response == ui.Button.YES) {
+    ui.alert('Iniciando el reinicio total del sistema... Por favor, ten paciencia.');
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const allSheets = ss.getSheets();
+
+      // Delete all sheets
+      allSheets.forEach(sheet => {
+        ss.deleteSheet(sheet);
+      });
+
+      SpreadsheetApp.flush(); // Apply deletions
+      Utilities.sleep(2000); // Wait a moment
+
+      // Recreate the structure
+      createSheetsIfNeeded();
+      SpreadsheetApp.flush();
+      Utilities.sleep(2000); // Wait a moment
+
+      // Setup the import formulas
+      setupImportFormulas();
+
+      ui.alert('¡Reinicio total completado! El sistema ha sido restaurado a su estado inicial.');
+
+    } catch (e) {
+      ui.alert('Ocurrió un error durante el reinicio total: ' + e.message);
+    }
+  } else {
+    ui.alert('Operación cancelada. No se ha realizado ningún cambio.');
+  }
 }
 
 function simulateHistoricalData() {
@@ -800,6 +619,63 @@ function normalizePhoneNumber(phone) {
   }
   return phone.toString().replace(/\D/g, '');
 }
+
+// --- Funciones para el Dashboard ---
+
+function showDashboard() {
+  const html = HtmlService.createTemplateFromFile('dashboard.html')
+    .evaluate()
+    .setWidth(1200)
+    .setHeight(700);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Dashboard de Inventario');
+}
+
+function getDashboardData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Get Estimated Inventory Data
+  const estimatedSheet = ss.getSheetByName(SHEET_NAMES.INVENTARIO_ESTIMADO);
+  const estimatedData = estimatedSheet.getLastRow() > 1 ? estimatedSheet.getRange(2, 1, estimatedSheet.getLastRow() - 1, 4).getValues() : [];
+  const inventory = estimatedData.map(row => {
+    return {
+      baseProduct: row[0],
+      lastInventory: row[1],
+      expectedStock: row[2],
+      unit: row[3]
+    };
+  });
+
+  // Get Sales Data
+  const salesSheet = ss.getSheetByName(SHEET_NAMES.SALES);
+  const salesData = salesSheet.getLastRow() > 1 ? salesSheet.getDataRange().getValues().slice(1) : [];
+  const sales = salesData.map(row => {
+      return {
+          orderId: row[0],
+          clientName: row[1],
+          productName: row[9],
+          quantity: row[10]
+      };
+  });
+
+  // Get Acquisitions Data
+  const acquisitionsSheet = ss.getSheetByName(SHEET_NAMES.ACQUISITIONS);
+  const acquisitionsData = acquisitionsSheet.getLastRow() > 1 ? acquisitionsSheet.getDataRange().getValues().slice(1) : [];
+  const acquisitions = acquisitionsData.map(row => {
+      return {
+          baseProduct: row[0],
+          format: row[1],
+          quantity: row[2]
+      };
+  });
+
+  return {
+    inventory: inventory,
+    sales: sales,
+    acquisitions: acquisitions
+  };
+}
+
+// --- Fin de funciones para el nuevo Dashboard v2 ---
 
 class SkuConverter {
   constructor(skuData) {

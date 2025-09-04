@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f4f9; }
+        .container { padding: 15px; }
+        h2 { color: #4285F4; margin-top: 0; }
+        .table-wrapper { max-height: 450px; overflow-y: auto; border: 1px solid #ddd; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; vertical-align: middle; }
+        th { background-color: #f2f2f2; position: sticky; top: 0; }
+        input[type="number"] { width: 100px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="text"] { width: 95%; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        #footer-buttons { text-align: right; margin-top: 0; padding: 15px; background-color: #fff; border-top: 1px solid #ddd; }
+        #save-button { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        #save-button:hover { opacity: 0.9; }
+        #save-button:disabled { background-color: #aaa; cursor: not-allowed; }
+        .loading { text-align: center; padding: 40px; color: #777; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Registrar Inventario Real</h2>
+        <p>Introduce el stock real para cada producto. Solo se guardarán las filas donde introduzcas un valor.</p>
+    </div>
+
+    <div class="table-wrapper">
+        <table id="inventory-table">
+            <thead>
+                <tr>
+                    <th>Producto Base</th>
+                    <th>Stock Esperado</th>
+                    <th>Unidad</th>
+                    <th>Stock Real</th>
+                    <th>Notas</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="loading"><td colspan="5">Cargando...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="footer-buttons">
+        <button id="save-button" type="button" onclick="saveInventory()">Guardar Inventario</button>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            google.script.run
+                .withSuccessHandler(populateTable)
+                .withFailureHandler(showError)
+                .getEstimatedInventoryForModal();
+        });
+
+        function populateTable(data) {
+            const tbody = document.getElementById('inventory-table').querySelector('tbody');
+            tbody.innerHTML = ''; // Clear loading message
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No se encontró inventario estimado. Por favor, genera el inventario estimado primero.</td></tr>';
+                document.getElementById('save-button').disabled = true;
+                return;
+            }
+
+            data.forEach(item => {
+                const row = tbody.insertRow();
+                row.dataset.baseProduct = item.baseProduct;
+                row.dataset.expectedStock = item.expectedStock;
+                row.dataset.unit = item.unit;
+                row.innerHTML = `
+                    <td>${item.baseProduct}</td>
+                    <td>${item.expectedStock}</td>
+                    <td>${item.unit}</td>
+                    <td><input type="number" step="any" name="actualStock" /></td>
+                    <td><input type="text" name="note" placeholder="Añadir nota..." /></td>
+                `;
+            });
+        }
+
+        function saveInventory() {
+            const button = document.getElementById("save-button");
+            button.disabled = true;
+            button.innerText = "Guardando...";
+
+            const rows = document.querySelectorAll('#inventory-table tbody tr');
+            const inventoryData = [];
+
+            rows.forEach(row => {
+                const actualStockInput = row.querySelector('input[name="actualStock"]');
+                if (actualStockInput && actualStockInput.value) { // Only process rows where a value was entered
+                    inventoryData.push({
+                        baseProduct: row.dataset.baseProduct,
+                        expectedStock: row.dataset.expectedStock,
+                        unit: row.dataset.unit,
+                        actualStock: actualStockInput.value,
+                        note: row.querySelector('input[name="note"]').value
+                    });
+                }
+            });
+
+            if (inventoryData.length === 0) {
+                alert('No has introducido ningún valor de stock. No se guardará nada.');
+                button.disabled = false;
+                button.innerText = "Guardar Inventario";
+                return;
+            }
+
+            google.script.run
+                .withSuccessHandler(response => {
+                    alert(response.message);
+                    google.script.host.close();
+                })
+                .withFailureHandler(err => {
+                    alert('Error al guardar: ' + err.message);
+                    button.disabled = false;
+                    button.innerText = "Guardar Inventario";
+                })
+                .saveRealInventory(inventoryData);
+        }
+
+        function showError(err) {
+            const tbody = document.getElementById('inventory-table').querySelector('tbody');
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red;">Error: ${err.message}</td></tr>`;
+            document.getElementById('save-button').disabled = true;
+        }
+    </script>
+</body>
+</html>
